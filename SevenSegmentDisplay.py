@@ -3,12 +3,21 @@
 # Display digits to 7 Segment display
 #
 
+import sys
 import RPi.GPIO as GPIO
-from time import sleep
+import time
+import threading
+
+#                   1   2   3   4   5   6   7   8   9  10  11  12
+#LEDpin_vs_Board = [29, 32, 31, 33, 35, 37, 15, 16, 22, 36, 38, 40]
+#LEDpin_vs_BCM   = [ 5, 12,  6, 13, 19, 26, 22, 23, 25, 16, 20, 21]
 
 #GPIO pin number(BCM) with each segment dispaly
 #             0, 1,  2,  3
-index2gpio = [13, 6, 5, 24]
+index2gpio = [ 5, 13, 19, 26]
+
+#                   1   2   7   6  10  11   8   9
+segment_vs_gpio = [ 6, 12, 22, 21, 16, 20, 23, 25]
 
 class SevenSegmentDisplay:
     
@@ -76,8 +85,6 @@ class SevenSegmentDisplay:
     # digit:value for display
     # ========================
     def displayOneDigit(self, digit):
-        #                  1   2   3   4 5  6   7   8   9  10  11  12
-        #LEDpin_vs_gpio = [26, 19, 13, 6, 5, 1, 21, 12, 16, 25, 20, 24]
 
         segmentON = [[]]
         #                 1  2  7  6 10 11  8  9
@@ -95,9 +102,8 @@ class SevenSegmentDisplay:
         segmentON.append([0, 0, 0, 0, 0, 0, 0, 1])  #.
         
         #all segment LED Call
-        #                   1  2  7 6 10 11  8  9
-        segment_vs_gpio = [26,19,21,1,25,20,12,16]
         for i in range(8):
+            print("displayOneDigit:GPIO.setup&Output: %s" %(segment_vs_gpio[i]))
             GPIO.setup(segment_vs_gpio[i], GPIO.OUT)   # 出力指定
             GPIO.output(segment_vs_gpio[i], segmentON[digit + 1][i])
         return
@@ -111,8 +117,6 @@ class SevenSegmentDisplay:
             GPIO.setup(index2gpio[i], GPIO.OUT)   # output mode
             GPIO.output(index2gpio[i], 0)         # LOW
             
-        #                   1  2  7 6 10 11  8  9
-        segment_vs_gpio = [26,19,21,1,25,20,12,16]
         for i in range(8):
             GPIO.setup(segment_vs_gpio[i], GPIO.OUT)   # output mode
             GPIO.output(segment_vs_gpio[i], 0)         # LOW
@@ -123,30 +127,63 @@ class SevenSegmentDisplay:
     # ========================
     def changeTarget(self, index):
         for i in range(4):
+            print("changeTarget:clear:GPIO.setup&Output: %s" %(index2gpio[i]))
             GPIO.setup(index2gpio[i], GPIO.OUT)   # output mode
             GPIO.output(index2gpio[i], 1)         # target off
             
+        print("changeTarget:setTarget:GPIO.setup&Output: %s" %(index2gpio[index]))
         GPIO.setup(index2gpio[index], GPIO.OUT)   # output mode
         GPIO.output(index2gpio[index], 0)         # target ON
 
+    def blinkAllZero(self):
+        thread_1 = threading.Thread(target=self.blinkAllZeroThead)
+        thread_1.start()        
+    
+    def blinkAllZeroThead(self):
+        # 1sec ON, 1sec Off x 4times
+        self.dispReset()
+        
+        for times in range(4):
+            elapsedtime = 0.0
+            starttime = time.monotonic()
+            while elapsedtime < 1.0:
+        
+                #all zero
+                for i in range(4):
+                    self.changeTarget(i)
+                    self.displayOneDigit(0)
+                    time.sleep(0.004)
+
+                    #period
+                    self.changeTarget(1)      # period position is 1
+                    self.displayOneDigit(10)  # '.' = 10 is rule of this method
+                    time.sleep(0.004)
+                
+                elapsedtime = time.monotonic() - starttime
+            
+            time.sleep(1)
+
     # ========================
+    # ShowDigitalValue()
     # only supprt 0-99.99
     # if over 3 decimal place, round to the second decimal place (by format())
     # ========================
     def ShowDigitalValue(self,value):
-
+        
         if (value > 99.995):
             print("not supprt the value for display: %s" %(value))
             return
         elif (value < 0):
             print("not supprt the value for display: %s" %(value))
             return
-        
-        
+                 
         s = "{:.2f}".format(value)   # to string
         slen = len(s)
         digit_list = list(s)     # devide character
         
+        slen = len(value)
+        digit_list = list(value)     # devide character
+
         i = 0
         if (slen != 5):
             i = 5 - slen        # case of value < 10
@@ -154,20 +191,39 @@ class SevenSegmentDisplay:
         for c in digit_list:
             if c == '.':
                 self.changeTarget(1)      # period position is 1
-                self.displayOneDigit(10)  #. = 10 is rule of this method
-                sleep(0.004)
+                self.displayOneDigit(10)  # '.' = 10 is rule of this method
+                time.sleep(0.004)
             else:
                 self.changeTarget(i)
                 self.displayOneDigit(int(c))
-                sleep(0.004)
+                time.sleep(0.004)
                 i += 1
+
 
 # ------------------ end of class ------------------
 
-def main():
+def continuous_show_digit_value(value, times):
     display = SevenSegmentDisplay()
     display.dispReset()
+    
+    starttime = time.monotonic()
+    elapsedtime = 0.0
+    
+    while elapsedtime < times:
+        display.ShowDigitalValue(value)
+        elapsedtime = time.monotonic() - starttime
 
+
+def main_disp_all():
+    disp_all_pattern()
+    print("all pattern finish. Hit any key.")
+    x = input()
+
+
+def main_manual_input():
+    display = SevenSegmentDisplay()
+    display.dispReset()
+    
     while True:
         print("please input float 0-99.99")
         x = input()
@@ -179,6 +235,8 @@ def main():
         display.dispReset()
         print("show finish.")
 
+
+
 #all segment ON by turns
 def disp_all_pattern():
     display = SevenSegmentDisplay()
@@ -187,16 +245,17 @@ def disp_all_pattern():
         display.changeTarget(i)
         
         for j in range(10):
-            display.changeTarget(j)
-            sleep(0.5)
+            display.displayOneDigit(j)
+            time.sleep(0.5)
             
         
     display.dispReset()
     print("disp_all_pattern finish.")
     #x = input()
 
-def set_signal():
+def set_by_bcm():
     display = SevenSegmentDisplay()
+    display.dispReset()
     while True:
         print("Input the target BCM")
         x = input()
@@ -210,6 +269,45 @@ def set_signal():
             display.test(x,y)
         else:
             print("invalid input :" + x)
+
+def blink_zerozero():
+    display = SevenSegmentDisplay()
+    display.dispReset()
+    display.blinkAllZero()
+    
+
+def main():
+    
+    a = 'empty'            # default argument
+    arglen = len(sys.argv)
+    if arglen > 2:
+        a = sys.argv[1]    # first argument. argv[0] is file or module name
+
+    disptime = 5.0         # sec second argument, optional.
+    if arglen > 3:
+        if is_float_str(sys.argv[2]):
+            disptime = float(sys.argv[2])
+
+    if is_float_str(a):     #temparature or other numeric
+        f = float(a)
+        continuous_show_digit_value(f, disptime)
+    elif a == 'all':
+        main_disp_all()
+    elif a == 'manual':
+        main_manual_input()
+    elif a == 'check':
+        set_by_bcm()
+    else:
+        blink_zerozero()
+        
+    
+def is_float_str(num_str):
+    try:
+        f = float(num_str)
+        return True
+    except ValueError:
+        return False
+
 
 
 if __name__ == '__main__':

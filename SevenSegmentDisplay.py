@@ -9,15 +9,17 @@ import time
 import threading
 
 #                   1   2   3   4   5   6   7   8   9  10  11  12
+
+
 #LEDpin_vs_Board = [29, 32, 31, 33, 35, 37, 15, 16, 22, 36, 38, 40]
 #LEDpin_vs_BCM   = [ 5, 12,  6, 13, 19, 26, 22, 23, 25, 16, 20, 21]
 
 #GPIO pin number(BCM) with each segment dispaly
-#             0, 1,  2,  3
-index2gpio = [ 5, 13, 19, 26]
+#               0, 1,  2,  3
+index2gpio = [ 26, 6, 12, 22]
 
 #                   1   2   7   6  10  11   8   9
-segment_vs_gpio = [ 6, 12, 22, 21, 16, 20, 23, 25]
+segment_vs_gpio = [ 19, 13, 21, 25, 5, 23, 20, 16]
 
 class SevenSegmentDisplay:
     
@@ -103,7 +105,7 @@ class SevenSegmentDisplay:
         
         #all segment LED Call
         for i in range(8):
-            print("displayOneDigit:GPIO.setup&Output: %s" %(segment_vs_gpio[i]))
+            debug_print("displayOneDigit:GPIO.setup&Output: %s" %(segment_vs_gpio[i]))
             GPIO.setup(segment_vs_gpio[i], GPIO.OUT)   # 出力指定
             GPIO.output(segment_vs_gpio[i], segmentON[digit + 1][i])
         return
@@ -127,11 +129,21 @@ class SevenSegmentDisplay:
     # ========================
     def changeTarget(self, index):
         for i in range(4):
-            print("changeTarget:clear:GPIO.setup&Output: %s" %(index2gpio[i]))
+            debug_print("changeTarget:clear:GPIO.setup&Output: %s" %(index2gpio[i]))
             GPIO.setup(index2gpio[i], GPIO.OUT)   # output mode
             GPIO.output(index2gpio[i], 1)         # target off
             
-        print("changeTarget:setTarget:GPIO.setup&Output: %s" %(index2gpio[index]))
+        debug_print("changeTarget:setTarget:GPIO.setup&Output: %s" %(index2gpio[index]))
+        GPIO.setup(index2gpio[index], GPIO.OUT)   # output mode
+        GPIO.output(index2gpio[index], 0)         # target ON
+
+    def clearTarget(self):
+        for i in range(4):
+            GPIO.setup(index2gpio[i], GPIO.OUT)   # output mode
+            GPIO.output(index2gpio[i], 1)         # target off
+            
+    def setTarget(self, index):
+        debug_print("changeTarget:setTarget:GPIO.setup&Output: %s" %(index2gpio[index]))
         GPIO.setup(index2gpio[index], GPIO.OUT)   # output mode
         GPIO.output(index2gpio[index], 0)         # target ON
 
@@ -169,6 +181,9 @@ class SevenSegmentDisplay:
     # if over 3 decimal place, round to the second decimal place (by format())
     # ========================
     def ShowDigitalValue(self,value):
+        #self.dispReset()
+        #time.sleep(1)
+        
         
         if (value > 99.995):
             print("not supprt the value for display: %s" %(value))
@@ -181,26 +196,32 @@ class SevenSegmentDisplay:
         slen = len(s)
         digit_list = list(s)     # devide character
         
-        slen = len(value)
-        digit_list = list(value)     # devide character
-
         i = 0
         if (slen != 5):
             i = 5 - slen        # case of value < 10
             
         for c in digit_list:
             if c == '.':
-                self.changeTarget(1)      # period position is 1
+                #self.changeTarget(1)      # period position is 1
+                self.clearTarget()
                 self.displayOneDigit(10)  # '.' = 10 is rule of this method
-                time.sleep(0.004)
+                self.setTarget(1)      # period position is 1
+                time.sleep(0.003)
             else:
-                self.changeTarget(i)
+                #self.changeTarget(i)
+                self.clearTarget()
                 self.displayOneDigit(int(c))
-                time.sleep(0.004)
+                self.setTarget(i)
+                time.sleep(0.003)
                 i += 1
 
 
 # ------------------ end of class ------------------
+
+def debug_print(mes):
+    #print(mes)
+    pass
+
 
 def continuous_show_digit_value(value, times):
     display = SevenSegmentDisplay()
@@ -280,11 +301,11 @@ def main():
     
     a = 'empty'            # default argument
     arglen = len(sys.argv)
-    if arglen > 2:
+    if arglen > 1:
         a = sys.argv[1]    # first argument. argv[0] is file or module name
 
     disptime = 5.0         # sec second argument, optional.
-    if arglen > 3:
+    if arglen > 2:
         if is_float_str(sys.argv[2]):
             disptime = float(sys.argv[2])
 
@@ -309,6 +330,42 @@ def is_float_str(num_str):
         return False
 
 
+def all_gpio_set_at_once():
+    
+    GPIO.setmode(GPIO.BCM)    # BCM Mode
+    GPIO.setwarnings(False)
+    
+    print("all gpio set signal at once, please input 0 or 1.")
+    x = input()
+    y = 0
+    if x == "1":
+        y = 1
+
+    for i in range(28):
+        GPIO.setup(i, GPIO.OUT)   # output mode
+        GPIO.output(i, y)         # target ON
+        time.sleep(0.004)
+    print("finished all gpio set signal.")
+
+def all_gpio_set_one_by_one():
+    
+    GPIO.setmode(GPIO.BCM)    # BCM Mode
+    GPIO.setwarnings(False)
+    
+    print("all gpio set on one by one each 1 sec.")
+
+    for i in range(28):
+        GPIO.setup(i, GPIO.OUT)   # output mode
+        GPIO.output(i, 3)         # target ON
+        print("GPIO %s" %(i))
+        time.sleep(1)
+        input()
+        #GPIO.output(i, 0)         # target ON
+        
+    print("o wa ri.")
 
 if __name__ == '__main__':
     main()
+    #all_gpio_set_at_once()
+    #all_gpio_set_one_by_one()
+    
